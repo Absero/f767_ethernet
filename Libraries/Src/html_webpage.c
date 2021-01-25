@@ -1,8 +1,11 @@
-#include <index.h>
+#include "index.h"
 
 #include <string.h>
 #include "lwip/api.h"
 #include "html_webpage.h"
+
+/* Private define ------------------------------------------------------------*/
+#define WEBSERVER_THREAD_PRIO    ( tskIDLE_PRIORITY + 4 )
 
 /* Private function prototypes -----------------------------------------------*/
 static void http_server_netconn_thread(void *arg);

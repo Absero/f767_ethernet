@@ -18,6 +18,7 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <tcp_server.h>
 #include "main.h"
 #include "cmsis_os.h"
 #include "lwip.h"
@@ -311,7 +312,8 @@ void StartDefaultTask(void const *argument) {
 	/* init code for LWIP */
 	MX_LWIP_Init();
 	/* USER CODE BEGIN 5 */
-	http_server_netconn_init();
+//	http_server_netconn_init();
+	tcpecho_init();
 	/* Infinite loop */
 	for (;;) {
 		osThreadTerminate(NULL);
