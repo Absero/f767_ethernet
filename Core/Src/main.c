@@ -26,6 +26,8 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include "udp.h"
+#include "lwip/api.h"
+#include "../../webpages/index.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,6 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define WEBSERVER_THREAD_PRIO    ( tskIDLE_PRIORITY + 4 )
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -61,6 +64,9 @@ void StartDefaultTask(void const *argument);
 void udp_receive_callback(void *arg, struct udp_pcb *upcb, struct pbuf *p,
 		const ip_addr_t *addr, u16_t port);
 void ethernetif_notify_conn_changed(struct netif *netif);
+void http_server_netconn_init();
+static void http_server_netconn_thread(void *arg);
+void http_server_serve(struct netconn *conn);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -292,25 +298,102 @@ static void MX_GPIO_Init(void) {
 }
 
 /* USER CODE BEGIN 4 */
-
-uint32_t message_count = 0;
-void udp_receive_callback(void *arg, struct udp_pcb *upcb, struct pbuf *p,
-		const ip_addr_t *addr, u16_t port) {
-
-	/*increment message count */
-	message_count++;
-	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-
-	/* Free receive pbuf */
-	pbuf_free(p);
+void http_server_netconn_init() {
+	sys_thread_new("HTTP", http_server_netconn_thread, NULL,
+	DEFAULT_THREAD_STACKSIZE, WEBSERVER_THREAD_PRIO);
 }
 
-uint8_t skaitliukas = 0;
+static void http_server_netconn_thread(void *arg) {
+	struct netconn *conn, *newconn;
+	err_t err, accept_err;
+
+	/* Create a new TCP connection handle */
+	conn = netconn_new(NETCONN_TCP);
+
+	if (conn != NULL) {
+		/* Bind to port 80 (HTTP) with default IP address */
+		err = netconn_bind(conn, NULL, 80);
+
+		if (err == ERR_OK) {
+			/* Put the connection into LISTEN state */
+			netconn_listen(conn);
+
+			while (1) {
+				/* accept any icoming connection */
+				accept_err = netconn_accept(conn, &newconn);
+				if (accept_err == ERR_OK) {
+					/* serve connection */
+					http_server_serve(newconn);
+
+					/* delete connection */
+					netconn_delete(newconn);
+				}
+			}
+		}
+	}
+}
+
+void http_server_serve(struct netconn *conn) {
+	struct netbuf *inbuf;
+	err_t recv_err;
+	char *buf;
+	u16_t buflen;
+
+	/* Read the data from the port, blocking if nothing yet there.
+	 We assume the request (the part we care about) is in one netbuf */
+	recv_err = netconn_recv(conn, &inbuf);
+
+	if (recv_err == ERR_OK) {
+		if (netconn_err(conn) == ERR_OK) {
+			netbuf_data(inbuf, (void**) &buf, &buflen);
+
+			/* Is this an HTTP GET command? (only check the first 5 chars, since
+			 there are other formats for GET, and we're keeping it very simple )*/
+			if ((buflen >= 5) && (strncmp(buf, "GET /", 5) == 0)) {
+				if (strncmp((char const*) buf, "GET /index.html", 15) == 0) {
+					netconn_write(conn, (const unsigned char* )index_html,
+							index_html_len, NETCONN_NOCOPY);
+				}
+//				if (strncmp((char const*) buf, "GET /led1", 9) == 0) {
+//					HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+//				}
+//				if (strncmp((char const*) buf, "GET /led2", 9) == 0) {
+//					HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+//				}
+//				if (strncmp((char const*) buf, "GET /led3", 9) == 0) {
+//					HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+//				}
+//				if (strncmp((char const*) buf, "GET /btn1", 9) == 0) {
+//					if (HAL_GPIO_ReadPin(User_Blue_Button_GPIO_Port,
+//							User_Blue_Button_Pin) == GPIO_PIN_SET)
+//						netconn_write(conn, (const unsigned char* )"ON", 2,
+//								NETCONN_NOCOPY);
+//					else
+//						netconn_write(conn, (const unsigned char* )"OFF", 3,
+//								NETCONN_NOCOPY);
+//				}
+//				if (strncmp((char const*) buf, "GET /adc", 8) == 0) {
+//					sprintf(buf, "%2.1f °C", getMCUTemperature());
+//					netconn_write(conn, (const unsigned char* )buf, strlen(buf),
+//							NETCONN_NOCOPY);
+//				}
+			}
+		}
+	}
+	/* Close the connection (server closes in HTTP) */
+	netconn_close(conn);
+
+	/* Delete the buffer (netconn_recv gives us ownership,
+	 so we have to make sure to deallocate the buffer) */
+	netbuf_delete(inbuf);
+}
+
+uint8_t statusChanged = 0;
 void ethernetif_notify_conn_changed(struct netif *netif) {
 	/* NOTE : This is function could be implemented in user file
 	 when the callback is needed,
 	 */
-	skaitliukas++;
+	statusChanged = statusChanged == 1 ? 2 : 1;
 }
 /* USER CODE END 4 */
 
@@ -321,53 +404,15 @@ void ethernetif_notify_conn_changed(struct netif *netif) {
  * @retval None
  */
 
-struct udp_pcb *my_udp;
-extern volatile struct netif gnetif;
-//	const char *message = "Hello world!\n\r";
-
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const *argument) {
 	/* init code for LWIP */
 	MX_LWIP_Init();
 	/* USER CODE BEGIN 5 */
-
-	ip_addr_t PC_IPADDR;
-	err_t err;
-
-	my_udp = udp_new();
-	if (my_udp != NULL) {
-		IP_ADDR4(&PC_IPADDR, 192, 168, 1, 107);
-		err = udp_connect(my_udp, &PC_IPADDR, 55151);
-		if (err == ERR_OK) {
-			/* Set a receive callback for the upcb */
-			udp_recv(my_udp, udp_receive_callback, NULL);
-		}
-	}
-
+	http_server_netconn_init();
 	/* Infinite loop */
-	uint16_t counter = 0;
 	for (;;) {
-		counter++;
-		if (counter >= 1000) {
-			counter = 0;
-			HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-		}
-
-		osDelay(1);
-
-//=======
-
-//		udp_connect(my_udp, &PC_IPADDR, 55151);
-//		struct pbuf *udp_buffer = NULL;
-//
-//		udp_buffer = pbuf_alloc(PBUF_TRANSPORT, strlen(message), PBUF_RAM);
-//		if (udp_buffer != NULL) {
-//			memcpy(udp_buffer->payload, message, strlen(message));
-//			udp_send(my_udp, udp_buffer);
-//			pbuf_free(udp_buffer);
-//		}
-//		udp_disconnect(my_udp);
-//		udp_remove(my_udp);
+		osThreadTerminate(NULL);
 	}
 	/* USER CODE END 5 */
 }
