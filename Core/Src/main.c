@@ -26,6 +26,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "html_webpage.h"
+#include "tcp_server.h"
+#include "tcp_client.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -313,7 +315,8 @@ void StartDefaultTask(void const *argument) {
 	MX_LWIP_Init();
 	/* USER CODE BEGIN 5 */
 //	http_server_netconn_init();
-	tcpecho_init();
+//	tcp_server_init();
+	tcp_client_init();
 	/* Infinite loop */
 	for (;;) {
 		osThreadTerminate(NULL);
