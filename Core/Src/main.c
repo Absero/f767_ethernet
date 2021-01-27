@@ -18,7 +18,6 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include <tcp_server.h>
 #include "main.h"
 #include "cmsis_os.h"
 #include "lwip.h"
@@ -50,6 +49,7 @@
 UART_HandleTypeDef huart3;
 
 osThreadId defaultTaskHandle;
+osThreadId dhcpTaskHandle;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -59,6 +59,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
 void StartDefaultTask(void const *argument);
+void Start_DHCP_Task(void const *argument);
 
 /* USER CODE BEGIN PFP */
 void ethernetif_notify_conn_changed(struct netif *netif);
@@ -121,6 +122,10 @@ int main(void) {
 	/* definition and creation of defaultTask */
 	osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 256);
 	defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+
+	/* definition and creation of dhcpTask */
+	osThreadDef(dhcpTask, Start_DHCP_Task, osPriorityLow, 0, 256);
+	dhcpTaskHandle = osThreadCreate(osThread(dhcpTask), NULL);
 
 	/* USER CODE BEGIN RTOS_THREADS */
 	/* add threads, ... */
@@ -322,6 +327,29 @@ void StartDefaultTask(void const *argument) {
 		osThreadTerminate(NULL);
 	}
 	/* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_Start_DHCP_Task */
+/**
+ * @brief Function implementing the dhcpTask thread.
+ * @param argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_Start_DHCP_Task */
+void Start_DHCP_Task(void const *argument) {
+	/* USER CODE BEGIN Start_DHCP_Task */
+	/* Infinite loop */
+	for (;;) {
+		/*
+		 * TODO:	patikrinti ar vekia echo serveris kartu mirksint ledui
+		 * 			patikrint ar gauna ip per dhcp (gnetif kintamasis) - jei ne, padaryt DHCP inicializavima vietoj ledo pagal DHCP_thread funkcija faile /home/naudotvardis/STM32Cube/Repository/STM32Cube_FW_F7_V1.16.0/Projects/STM32756G_EVAL/Applications/LwIP/LwIP_HTTP_Server_Netconn_RTOS/Src/app_ethernet.c
+		 * 			patikrinti ar eina papingint lwip.local, jei ne - paziuret routeryje ar atsiranda su ip ir vardu
+		 *
+		 */
+		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+		osDelay(1000);
+	}
+	/* USER CODE END Start_DHCP_Task */
 }
 
 /**

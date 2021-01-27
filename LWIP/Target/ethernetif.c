@@ -281,8 +281,9 @@ static void low_level_init(struct netif *netif)
 
 /* create the task that handles the ETH_MAC */
 /* USER CODE BEGIN OS_THREAD_DEF_CREATE_CMSIS_RTOS_V1 */
-  osThreadDef(EthIf, ethernetif_input, osPriorityRealtime, 0, INTERFACE_THREAD_STACK_SIZE);
-  osThreadCreate (osThread(EthIf), netif);
+	osThreadDef(EthIf, ethernetif_input, osPriorityRealtime, 0,
+			INTERFACE_THREAD_STACK_SIZE);
+	osThreadCreate(osThread(EthIf), netif);
 /* USER CODE END OS_THREAD_DEF_CREATE_CMSIS_RTOS_V1 */
   /* Enable MAC and DMA transmission and reception */
   HAL_ETH_Start(&heth);
@@ -602,25 +603,23 @@ err_t ethernetif_init(struct netif *netif)
 /* USER CODE BEGIN 6 */
 
 /**
-* @brief  Returns the current time in milliseconds
-*         when LWIP_TIMERS == 1 and NO_SYS == 1
-* @param  None
-* @retval Time
-*/
-u32_t sys_jiffies(void)
-{
-  return HAL_GetTick();
+ * @brief  Returns the current time in milliseconds
+ *         when LWIP_TIMERS == 1 and NO_SYS == 1
+ * @param  None
+ * @retval Time
+ */
+u32_t sys_jiffies(void) {
+	return HAL_GetTick();
 }
 
 /**
-* @brief  Returns the current time in milliseconds
-*         when LWIP_TIMERS == 1 and NO_SYS == 1
-* @param  None
-* @retval Time
-*/
-u32_t sys_now(void)
-{
-  return HAL_GetTick();
+ * @brief  Returns the current time in milliseconds
+ *         when LWIP_TIMERS == 1 and NO_SYS == 1
+ * @param  None
+ * @retval Time
+ */
+u32_t sys_now(void) {
+	return HAL_GetTick();
 }
 
 /* USER CODE END 6 */
@@ -755,15 +754,14 @@ void ethernetif_update_config(struct netif *netif)
 
 /* USER CODE BEGIN 8 */
 /**
-  * @brief  This function notify user about link status changement.
-  * @param  netif: the network interface
-  * @retval None
-  */
-__weak void ethernetif_notify_conn_changed(struct netif *netif)
-{
-  /* NOTE : This is function could be implemented in user file
-            when the callback is needed,
-  */
+ * @brief  This function notify user about link status changement.
+ * @param  netif: the network interface
+ * @retval None
+ */
+__weak void ethernetif_notify_conn_changed(struct netif *netif) {
+	/* NOTE : This is function could be implemented in user file
+	 when the callback is needed,
+	 */
 
 }
 /* USER CODE END 8 */
