@@ -37,8 +37,7 @@ static void tcp_client_thread(void *arg) {
 
 		if (err == ERR_OK) {
 			/* Tell connection to go into listening mode */
-			netconn_listen(conn);
-
+//			netconn_listen(conn);
 			while (1) {
 				/* Grab new connection. */
 				connect_err = netconn_connect(conn, &remote_ip, 55152); //todo paziuret portai ar geri
