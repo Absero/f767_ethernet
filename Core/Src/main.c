@@ -37,6 +37,17 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define WEBSERVER_THREAD_PRIO    ( tskIDLE_PRIORITY + 4 )
+#define MAX_DHCP_TRIES  4
+#define USE_DHCP 0
+
+/* DHCP process states */
+#define DHCP_OFF                   (uint8_t) 0
+#define DHCP_START                 (uint8_t) 1
+#define DHCP_WAIT_ADDRESS          (uint8_t) 2
+#define DHCP_ADDRESS_ASSIGNED      (uint8_t) 3
+#define DHCP_TIMEOUT               (uint8_t) 4
+#define DHCP_LINK_DOWN             (uint8_t) 5
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,6 +62,9 @@ UART_HandleTypeDef huart3;
 osThreadId defaultTaskHandle;
 osThreadId dhcpTaskHandle;
 /* USER CODE BEGIN PV */
+
+__IO uint8_t DHCP_state = DHCP_OFF;
+extern struct netif gnetif;
 
 /* USER CODE END PV */
 
@@ -298,13 +312,16 @@ static void MX_GPIO_Init(void) {
 }
 
 /* USER CODE BEGIN 4 */
-uint8_t statusChanged = 0;
 void ethernetif_notify_conn_changed(struct netif *netif) {
-	/* NOTE : This is function could be implemented in user file
-	 when the callback is needed,
-	 */
-	statusChanged = statusChanged == 1 ? 2 : 1;
+	if (netif_is_link_up(netif)) {
+		DHCP_state = DHCP_START;
+		netif_set_up(netif);
+	} else {
+		DHCP_state = DHCP_LINK_DOWN;
+		netif_set_down(netif);
+	}
 }
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -319,6 +336,12 @@ void StartDefaultTask(void const *argument) {
 	/* init code for LWIP */
 	MX_LWIP_Init();
 	/* USER CODE BEGIN 5 */
+
+	if (netif_is_up(&gnetif))
+		DHCP_state = DHCP_START;
+	else
+		DHCP_state = DHCP_LINK_DOWN;
+
 //	http_server_netconn_init();
 //	tcp_server_init();
 	tcp_client_init();
@@ -338,17 +361,62 @@ void StartDefaultTask(void const *argument) {
 /* USER CODE END Header_Start_DHCP_Task */
 void Start_DHCP_Task(void const *argument) {
 	/* USER CODE BEGIN Start_DHCP_Task */
+#if USE_DHCP
+	struct netif *netif = (struct netif*) argument;
+	ip_addr_t ipaddr;
+	ip_addr_t netmask;
+	ip_addr_t gw;
+	struct dhcp *dhcp;
+
 	/* Infinite loop */
 	for (;;) {
-		/*
-		 * TODO:	patikrinti ar vekia echo serveris kartu mirksint ledui
-		 * 			patikrint ar gauna ip per dhcp (gnetif kintamasis) - jei ne, padaryt DHCP inicializavima vietoj ledo pagal DHCP_thread funkcija faile /home/naudotvardis/STM32Cube/Repository/STM32Cube_FW_F7_V1.16.0/Projects/STM32756G_EVAL/Applications/LwIP/LwIP_HTTP_Server_Netconn_RTOS/Src/app_ethernet.c
-		 * 			patikrinti ar eina papingint lwip.local, jei ne - paziuret routeryje ar atsiranda su ip ir vardu
-		 *
-		 */
-		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-		osDelay(1000);
+//		HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+//		osDelay(1000);
+		switch (DHCP_state) {
+		case DHCP_START :
+			ip_addr_set_zero_ip4(&netif->ip_addr);
+			ip_addr_set_zero_ip4(&netif->netmask);
+			ip_addr_set_zero_ip4(&netif->gw);
+			break;
+		case DHCP_WAIT_ADDRESS :
+			if (dhcp_supplied_address(netif))
+				DHCP_state = DHCP_ADDRESS_ASSIGNED;
+			else {
+				dhcp = (struct dhcp*) netif_get_client_data(netif,
+						LWIP_NETIF_CLIENT_DATA_INDEX_DHCP);
+
+				/* DHCP timeout */
+				if (dhcp->tries > MAX_DHCP_TRIES) {
+					DHCP_state = DHCP_TIMEOUT;
+
+					/* Stop DHCP */
+					dhcp_stop(netif);
+
+					/* Static address used */
+					IP_ADDR4(&ipaddr, 192, 168, 1, 49);
+					IP_ADDR4(&netmask, 255, 255, 255, 0);
+					IP_ADDR4(&gw, 192, 168, 1, 1);
+					netif_set_addr(netif, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask),
+							ip_2_ip4(&gw));
+				}
+			}
+			break;
+		case DHCP_LINK_DOWN :
+			/* Stop DHCP */
+			dhcp_stop(netif);
+			DHCP_state = DHCP_OFF;
+			break;
+		default:
+			break;
+		}
+
+		osDelay(250);
 	}
+#else
+	for (;;) {
+		osThreadTerminate(NULL);
+	}
+#endif
 	/* USER CODE END Start_DHCP_Task */
 }
 
